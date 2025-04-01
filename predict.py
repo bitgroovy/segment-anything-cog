@@ -2,27 +2,14 @@
 # https://github.com/replicate/cog/blob/main/docs/python.md
 
 from cog import BasePredictor, Input, Path
-from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 import sys
 sys.path.append("..")
 import cv2
 import numpy as np
 import imutils
-
-def show_anns(anns):
-    if len(anns) == 0:
-        return
-    sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
-    
-    ref = anns[0]['segmentation']
-
-    canvas = np.zeros((ref.shape[0], ref.shape[1], 3))
-
-    for ann in sorted_anns:
-        m = ann['segmentation']
-        color_mask = np.random.random((1, 3))
-        canvas[m] = np.uint8(color_mask*255)
-    return canvas
+import os
+from typing import List
 
 class Predictor(BasePredictor):
     def setup(self):
@@ -47,8 +34,8 @@ class Predictor(BasePredictor):
         crop_overlap_ratio: float = Input(default=512 / 1500, description= "Sets the degree to which crops overlap. In the first crop layer, crops will overlap by this fraction of the image length. Later layers with more crops scale down this overlap."),
         crop_n_points_downscale_factor: int = Input(default=1, description= "The number of points-per-side sampled in layer n is scaled down by crop_n_points_downscale_factor**n."),
         min_mask_region_area: int = Input(default=0, description="If >0, postprocessing will be applied to remove disconnected regions and holes in masks with area smaller than min_mask_region_area."),
-        ) -> Path:
-        """Run a single prediction on the model"""
+        ) -> List[Path]:
+        """Run a single prediction on the model and return list of individual masks as images"""
         args = locals()
         del args["self"]
         del args["image"]
@@ -60,8 +47,17 @@ class Predictor(BasePredictor):
         image = imutils.resize(image, width=resize_width)
 
         masks = mask_generator.generate(image)
-        annotations = show_anns(masks)
 
-        cv2.imwrite("output_mask.png", annotations)
+        os.makedirs("output_masks", exist_ok=True)
+        output_paths = []
 
-        return Path("output_mask.png")
+        for idx, ann in enumerate(masks):
+            m = ann['segmentation']
+            mask_img = np.zeros_like(image, dtype=np.uint8)
+            mask_img[m] = [255, 255, 255]  # white mask on black background
+
+            filename = f"output_masks/mask_{idx}.png"
+            cv2.imwrite(filename, mask_img)
+            output_paths.append(Path(filename))
+
+        return output_paths
