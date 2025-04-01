@@ -22,10 +22,3 @@ build:
 
 predict: "predict.py:Predictor"
 
-# Optional but helpful if you want to be explicit
-# about return types, especially for Replicate web UI
-outputs:
-  - name: output
-    type: path
-    multiple: true
-    description: "List of individual mask image files"
